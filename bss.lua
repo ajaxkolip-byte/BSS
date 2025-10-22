@@ -4,14 +4,12 @@ local RunService = game:GetService("RunService")
 local PathfindingService = game:GetService("PathfindingService")
 local VirtualUser = game:GetService("VirtualUser")
 local Workspace = game:GetService("Workspace")
-
 local GRID_SIZE = 6
 local JUMP_HEIGHT = 150
 local CHECK_INTERVAL = 0.1
 local OBSTACLE_CHECK_DISTANCE = 5
 local MOVETO_TIMEOUT = 5
 local TOKEN_CLEAR_INTERVAL = 5
-
 local toggles = {
     field = "Ant Field",
     dig = false,
@@ -30,20 +28,17 @@ local toggles = {
     lastTokenClearTime = tick(),
     lastTokenCheckTime = tick()
 }
-
 local player = Players.LocalPlayer
 local events = ReplicatedStorage:WaitForChild("Events", 10)
 local flowerZones = workspace:WaitForChild("FlowerZones")
 local collectibles = workspace:WaitForChild("Collectibles")
 local honeycombs = workspace:WaitForChild("Honeycombs")
 local fieldsTable = {}
-
 for _, field in ipairs(flowerZones:GetChildren()) do
     field.Size += Vector3.new(0, 60, 0)
     table.insert(fieldsTable, field.Name)
 end
 table.sort(fieldsTable, function(a, b) return a:lower() < b:lower() end)
-
 local function modifier(position, size, var)
     local part = Instance.new("Part")
     part.Size = size
@@ -53,15 +48,12 @@ local function modifier(position, size, var)
     part.Transparency = 1
     part.CastShadow = false
     part.Parent = Workspace
-
     local modifier = Instance.new("PathfindingModifier")
     modifier.PassThrough = var
     modifier.Label = "WalkThrough"
     modifier.Parent = part
-
     return part
 end
-
 local function modifierFences(cframe, size)
     local part = Instance.new("Part")
     part.Size = size
@@ -77,26 +69,21 @@ local function modifierFences(cframe, size)
     modifier.Parent = part
     return part
 end
-
 for _, part in next, workspace:FindFirstChild("FieldDecos"):GetDescendants() do if part:IsA("BasePart") then part.CanCollide = false part.Transparency = part.Transparency < 0.5 and 0.5 or part.Transparency task.wait() end end
 for _, part in next, workspace:FindFirstChild("Decorations"):GetDescendants() do if part:IsA("BasePart") and (part.Parent.Name == "Bush" or part.Parent.Name == "Blue Flower") then part.CanCollide = false part.Transparency = part.Transparency < 0.5 and 0.5 or part.Transparency task.wait() end end
 for i,v in next, workspace.Decorations.Misc:GetDescendants() do if v.Parent.Name == "Mushroom" then v.CanCollide = false v.Transparency = 0.5 end end
-
 local flowers = Workspace:WaitForChild("Flowers")
 for _, flower in ipairs(flowers:GetDescendants()) do
     if flower:IsA("BasePart") then
         modifier(flower.Position, (flower.Size + Vector3.new(3,3,3)), true)
     end
 end
-
 for _, zone in ipairs(flowerZones:GetDescendants()) do
     if zone:IsA("BasePart") then
         modifier(zone.Position, (zone.Size + Vector3.new(20, 20, 20)), true)
     end
 end
-
 workspace.Map.Fences:Destroy()
-
 local function formatNumber(num)
     local suffixes = {"", "K", "M", "B", "T", "Qa", "Qi", "Sx", "Sp", "Oc", "No", "Dc", "Ud", "Dd", "Td", "Qad", "Qid"}
     local i = 1
@@ -106,7 +93,6 @@ local function formatNumber(num)
     end
     return i == 1 and tostring(num) or string.format("%.1f%s", num, suffixes[i])
 end
-
 local function formatTime(seconds)
     local days = math.floor(seconds / (24 * 3600))
     seconds = seconds % (24 * 3600)
@@ -116,11 +102,9 @@ local function formatTime(seconds)
     seconds = math.floor(seconds % 60)
     return string.format("%02d:%02d:%02d:%02d", days, hours, minutes, seconds)
 end
-
 local function grabStats()
     return events.RetrievePlayerStats:InvokeServer() or {}
 end
-
 local function isPathBlocked(humanoidRootPart, nextWaypoint)
     if not humanoidRootPart or not nextWaypoint then return false end
     local rayOrigin = humanoidRootPart.Position
@@ -129,17 +113,14 @@ local function isPathBlocked(humanoidRootPart, nextWaypoint)
     raycastParams.FilterDescendantsInstances = {humanoidRootPart.Parent}
     raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
     raycastParams.IgnoreWater = true
-
     local raycastResult = workspace:Raycast(rayOrigin, rayDirection, raycastParams)
     return raycastResult and raycastResult.Instance.Transparency < 0.5
 end
-
 local function moveAlongPath(humanoid, waypoints, targetPos)
     if not humanoid or not humanoid.Parent then return false end
     local character = humanoid.Parent
     local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
     if not humanoidRootPart then return false end
-
     for _, waypoint in ipairs(waypoints) do
         local pos = waypoint.Position
         if waypoint.Action == Enum.PathWaypointAction.Jump then
@@ -157,7 +138,6 @@ local function moveAlongPath(humanoid, waypoints, targetPos)
     end
     return true
 end
-
 local function computePath(targetPos)
     local character = player.Character
     if not character or not character:FindFirstChild("HumanoidRootPart") or not character:FindFirstChild("Humanoid") then
@@ -188,17 +168,14 @@ local function computePath(targetPos)
     end
     return moveAlongPath(humanoid, path:GetWaypoints(), targetPos)
 end
-
 local function moveToPosition(targetPos, duration)
     local character = player.Character
     local humanoid = character and character:FindFirstChild("Humanoid")
     local humanoidRootPart = character and character:FindFirstChild("HumanoidRootPart")
     if not humanoid or not humanoidRootPart then return false end
-
     local startPos = humanoidRootPart.Position
     local startTime = tick()
     local alpha = 0
-
     while alpha < 1 and humanoid.Parent and humanoidRootPart.Parent do
         local elapsed = tick() - startTime
         alpha = math.clamp(elapsed / duration, 0, 1)
@@ -208,14 +185,12 @@ local function moveToPosition(targetPos, duration)
         end
         RunService.Heartbeat:Wait()
     end
-
     if humanoid.Parent and humanoidRootPart.Parent then
         humanoidRootPart.CFrame = CFrame.new(targetPos)
         return true
     end
     return false
 end
-
 local function hasHiveClaimed()
     for i = 6, 1, -1 do
         local hive = honeycombs:FindFirstChild("Hive" .. i)
@@ -225,7 +200,6 @@ local function hasHiveClaimed()
     end
     return false
 end
-
 local function claimHive()
     if hasHiveClaimed() then return true end
     for i = 6, 1, -1 do
@@ -243,21 +217,18 @@ local function claimHive()
     end
     return false
 end
-
 local function dig()
     if not toggles.dig or not hasHiveClaimed() then return end
     local toolCollectEvent = events:FindFirstChild("ToolCollect")
     local character = player.Character
     local humanoid = character and character:FindFirstChild("Humanoid")
     if not toolCollectEvent or not humanoid then return end
-
     local animator = humanoid:FindFirstChildOfClass("Animator") or Instance.new("Animator", humanoid)
     for _, animTrack in pairs(animator:GetPlayingAnimationTracks()) do
         if animTrack.Animation.AnimationId == "rbxassetid://522635514" then
             return
         end
     end
-
     toolCollectEvent:FireServer()
     local animation = Instance.new("Animation")
     animation.AnimationId = "rbxassetid://522635514"
@@ -265,7 +236,6 @@ local function dig()
     animationTrack:Play()
     animationTrack.Stopped:Connect(function() animation:Destroy() end)
 end
-
 local function isPlayerInField(field)
     local humanoidRootPart = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
     if not humanoidRootPart or not field then return false end
@@ -275,32 +245,27 @@ local function isPlayerInField(field)
     end
     return false
 end
-
 local function convertHoney()
     if not hasHiveClaimed() or toggles.converting or toggles.hasWalkedToHive then return end
     local coreStats = player:FindFirstChild("CoreStats")
     if not coreStats or coreStats.Pollen.Value < (toggles.convertPercentage / 100) * coreStats.Capacity.Value then return end
-
     toggles.converting = true
     toggles.hasWalked = false
     toggles.hasWalkedToHive = true
     toggles.sprinklersPlaced = false
     toggles.placingSprinklers = false
-
     local humanoidRootPart = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
     if not humanoidRootPart then
         toggles.converting = false
         toggles.hasWalkedToHive = false
         return
     end
-
     local spawnPos = (player.SpawnPos.Value * CFrame.fromEulerAnglesXYZ(0, math.rad(110), 0) + Vector3.new(0, 3, 9)).Position
     if not moveToPosition(spawnPos, 3) then
         toggles.converting = false
         toggles.hasWalkedToHive = false
         return
     end
-
     local activateButton = player.PlayerGui.ScreenGui.ActivateButton
     local maxAttempts = 10
     local attemptCount = 0
@@ -313,16 +278,13 @@ local function convertHoney()
             moveToPosition(spawnPos, 3)
         end
     end
-
     local startTime = tick()
     while coreStats.Pollen.Value > 0 and tick() - startTime < 30 do
         task.wait(0.1)
     end
-    if coreStats.Pollen.Value == 0 then task.wait(5)  end
-
+    if coreStats.Pollen.Value == 0 then task.wait(5) end
     toggles.converting = false
     toggles.hasWalkedToHive = false
-
     if toggles.autoFarm then
         local targetField = flowerZones:FindFirstChild(toggles.field)
         if targetField then
@@ -331,38 +293,17 @@ local function convertHoney()
         end
     end
 end
-
-local function farm()
-    if not hasHiveClaimed() or not toggles.autoFarm or toggles.converting then return end
-    local targetField = flowerZones:FindFirstChild(toggles.field)
-    if not targetField then return end
-
-    if not isPlayerInField(targetField) and not toggles.hasWalked and not toggles.hasWalkedToHive then
-        moveToPosition(targetField.Position + Vector3.new(0, 3, 0), 3)
-        toggles.hasWalked = true
-        toggles.sprinklersPlaced = false
-        toggles.placingSprinklers = false
-    elseif isPlayerInField(targetField) then
-        toggles.hasWalked = false
-    end
-
-    convertHoney()
-end
-
 local function collectTokens()
     if not hasHiveClaimed() or not toggles.autoFarm or toggles.converting or toggles.placingSprinklers then return end
     if tick() - toggles.lastTokenCheckTime < 0.1 then return end
     toggles.lastTokenCheckTime = tick()
-
     local character = player.Character
     local humanoid = character and character:FindFirstChild("Humanoid")
     local humanoidRootPart = character and character:FindFirstChild("HumanoidRootPart")
     if not humanoid or not humanoidRootPart or not collectibles then return end
-
     local targetField = flowerZones:FindFirstChild(toggles.field)
     if not targetField then return end
     local region = Region3.new(targetField.Position - targetField.Size / 2, targetField.Position + targetField.Size / 2)
-
     local closestToken, closestDistance = nil, math.huge
     local maxDistance = 50
     for _, token in ipairs(collectibles:GetChildren()) do
@@ -383,7 +324,6 @@ local function collectTokens()
             end
         end
     end
-
     if closestToken then
         humanoid:MoveTo(closestToken.Position)
         local startTime = tick()
@@ -399,58 +339,91 @@ local function collectTokens()
         end
     end
 end
-
 local function placeSprinklers()
-    if not hasHiveClaimed() or not toggles.autoFarm or not toggles.autoSprinklers or toggles.converting or toggles.placingSprinklers or toggles.sprinklersPlaced then return end
+    if not hasHiveClaimed() then
+        return
+    end
+    if not toggles.autoFarm then
+        return
+    end
+    if not toggles.autoSprinklers then
+        return
+    end
+    if toggles.converting then
+        return
+    end
+    if toggles.placingSprinklers then
+        return
+    end
+    if toggles.sprinklersPlaced then
+        return
+    end
     local character = player.Character
     local humanoid = character and character:FindFirstChild("Humanoid")
     local humanoidRootPart = character and character:FindFirstChild("HumanoidRootPart")
-    if not humanoid or not humanoidRootPart then return end
-
+    if not humanoid or not humanoidRootPart then
+        return
+    end
     local targetField = flowerZones:FindFirstChild(toggles.field)
-    if not targetField or not isPlayerInField(targetField) then return end
-
+    if not targetField then
+        return
+    end
+    if not isPlayerInField(targetField) then
+        return
+    end
     toggles.placingSprinklers = true
     local sprinkler = grabStats().EquippedSprinkler
-    local moves = ({["Silver Soakers"] = 2, ["Golden Gushers"] = 3, ["Diamond Drenchers"] = 4})[sprinkler] or 1
-    local positions = {
-        targetField.Position + Vector3.new(0, 3, 0),
-        targetField.Position + Vector3.new(-10, 3, 0),
-        targetField.Position + Vector3.new(10, 3, 0),
-        targetField.Position + Vector3.new(0, 3, 10)
-    }
-
-    local allSprinklersPlaced = true
-
-    for i = 1, math.min(moves, #positions) do
-        local targetPos = positions[i]
-        while humanoid:GetState() ~= Enum.HumanoidStateType.Running and humanoid:GetState() ~= Enum.HumanoidStateType.Landed do
-            RunService.Heartbeat:Wait()
-        end
-        humanoid:MoveTo(targetPos)
-        local startTime = tick()
-        while (humanoidRootPart.Position - targetPos).Magnitude > 4 and tick() - startTime < 5 do
-            if not isPlayerInField(targetField) then
-                toggles.placingSprinklers = false
-                return
-            end
-            RunService.Heartbeat:Wait()
-        end
-        if (humanoidRootPart.Position - targetPos).Magnitude <= 4 then
-            local originalJumpPower = humanoid.JumpPower
+    if not sprinkler then
+        toggles.placingSprinklers = false
+        return
+    end
+    local e = 1
+    if sprinkler == "Basic Sprinkler" or sprinkler == "The Supreme Saturator" then
+        e = 1
+    elseif sprinkler == "Silver Soakers" then
+        e = 2
+    elseif sprinkler == "Golden Gushers" then
+        e = 3
+    elseif sprinkler == "Diamond Drenchers" then
+        e = 4
+    else
+        toggles.placingSprinklers = false
+        return
+    end
+    for i = 1, e do
+        local k = humanoid.JumpPower
+        if e ~= 1 then
             humanoid.JumpPower = 70
             humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
-            repeat RunService.Heartbeat:Wait() until humanoid:GetState() == Enum.HumanoidStateType.Freefall
-            repeat RunService.Heartbeat:Wait() until humanoid:GetState() == Enum.HumanoidStateType.Landed or humanoid:GetState() == Enum.HumanoidStateType.Running
-            humanoid.JumpPower = originalJumpPower
-            events.PlayerActivesCommand:FireServer({["Name"] = "Sprinkler Builder"})
-            task.wait(0.5)
-        else
-            allSprinklersPlaced = false
+            task.wait(0.2)
+        end
+        ReplicatedStorage.Events.PlayerActivesCommand:FireServer({["Name"] = "Sprinkler Builder"})
+        if e ~= 1 then
+            humanoid.JumpPower = k
+            task.wait(1)
         end
     end
-    toggles.sprinklersPlaced = allSprinklersPlaced
+    toggles.sprinklersPlaced = true
     toggles.placingSprinklers = false
+end
+
+local function farm()
+    if not hasHiveClaimed() or not toggles.autoFarm or toggles.converting then return end
+    local targetField = flowerZones:FindFirstChild(toggles.field)
+    if not targetField then return end
+    if not isPlayerInField(targetField) and not toggles.hasWalked and not toggles.hasWalkedToHive then
+        moveToPosition(targetField.Position + Vector3.new(0, 3, 0), 3)
+        toggles.hasWalked = true
+        toggles.sprinklersPlaced = false -- Reset sprinklersPlaced when moving to a new field
+        toggles.placingSprinklers = false
+    elseif isPlayerInField(targetField) then
+        toggles.hasWalked = false
+        -- Run placeSprinklers once when the player enters the field
+        if toggles.autoSprinklers and not toggles.sprinklersPlaced and not toggles.placingSprinklers then
+            placeSprinklers()
+        end
+    end
+    convertHoney()
 end
 
 local function avoidMobs()
@@ -615,7 +588,6 @@ RunService.Heartbeat:Connect(function()
         collectTokens()
         updateWalkspeed()
         avoidMobs()
-        placeSprinklers()
         clearVisitedTokens()
     end
 end)
