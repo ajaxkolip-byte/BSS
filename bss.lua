@@ -1,3 +1,5 @@
+--// v1.00 \\--
+
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -339,6 +341,7 @@ local function collectTokens()
         end
     end
 end
+
 local function placeSprinklers()
     if not hasHiveClaimed() then
         return
@@ -347,6 +350,9 @@ local function placeSprinklers()
         return
     end
     if not toggles.autoSprinklers then
+        return
+    end
+    if toggles.hasWalked then 
         return
     end
     if toggles.converting then
@@ -393,9 +399,11 @@ local function placeSprinklers()
     for i = 1, e do
         local k = humanoid.JumpPower
         if e ~= 1 then
-            humanoid.JumpPower = 70
-            humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
-            task.wait(0.2)
+            if humanoid:GetState() == Enum.HumanoidStateType.Landed or humanoid:GetState() == Enum.HumanoidStateType.Running then
+                humanoid.JumpPower = 70
+                humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+                task.wait(1)
+            end
         end
         ReplicatedStorage.Events.PlayerActivesCommand:FireServer({["Name"] = "Sprinkler Builder"})
         if e ~= 1 then
