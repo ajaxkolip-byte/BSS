@@ -1,4 +1,4 @@
---// v1.00 \\--
+--// v1.01 \\--
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -422,12 +422,12 @@ local function farm()
     if not isPlayerInField(targetField) and not toggles.hasWalked and not toggles.hasWalkedToHive then
         moveToPosition(targetField.Position + Vector3.new(0, 3, 0), 3)
         toggles.hasWalked = true
-        toggles.sprinklersPlaced = false -- Reset sprinklersPlaced when moving to a new field
+        toggles.sprinklersPlaced = false
         toggles.placingSprinklers = false
     elseif isPlayerInField(targetField) then
         toggles.hasWalked = false
-        -- Run placeSprinklers once when the player enters the field
         if toggles.autoSprinklers and not toggles.sprinklersPlaced and not toggles.placingSprinklers then
+		task.wait(2)
             placeSprinklers()
         end
     end
