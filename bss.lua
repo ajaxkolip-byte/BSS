@@ -1,4 +1,4 @@
---// v1.01 \\--
+--// v1.02 \\--
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -24,6 +24,7 @@ local toggles = {
     convertPercentage = 95,
     walkspeedEnabled = false,
     walkspeed = 50,
+	lerpSpeed = 3,
     avoidMobs = false,
     sprinklersPlaced = false,
     placingSprinklers = false,
@@ -37,7 +38,7 @@ local collectibles = workspace:WaitForChild("Collectibles")
 local honeycombs = workspace:WaitForChild("Honeycombs")
 local fieldsTable = {}
 for _, field in ipairs(flowerZones:GetChildren()) do
-    field.Size += Vector3.new(0, 60, 0)
+    field.Size += Vector3.new(0, 120, 0)
     table.insert(fieldsTable, field.Name)
 end
 table.sort(fieldsTable, function(a, b) return a:lower() < b:lower() end)
@@ -71,9 +72,6 @@ local function modifierFences(cframe, size)
     modifier.Parent = part
     return part
 end
-for _, part in next, workspace:FindFirstChild("FieldDecos"):GetDescendants() do if part:IsA("BasePart") then part.CanCollide = false part.Transparency = part.Transparency < 0.5 and 0.5 or part.Transparency task.wait() end end
-for _, part in next, workspace:FindFirstChild("Decorations"):GetDescendants() do if part:IsA("BasePart") and (part.Parent.Name == "Bush" or part.Parent.Name == "Blue Flower") then part.CanCollide = false part.Transparency = part.Transparency < 0.5 and 0.5 or part.Transparency task.wait() end end
-for i,v in next, workspace.Decorations.Misc:GetDescendants() do if v.Parent.Name == "Mushroom" then v.CanCollide = false v.Transparency = 0.5 end end
 local flowers = Workspace:WaitForChild("Flowers")
 for _, flower in ipairs(flowers:GetDescendants()) do
     if flower:IsA("BasePart") then
@@ -85,7 +83,9 @@ for _, zone in ipairs(flowerZones:GetDescendants()) do
         modifier(zone.Position, (zone.Size + Vector3.new(20, 20, 20)), true)
     end
 end
-workspace.Map.Fences:Destroy()
+if workspace.Map:FindFirstChild("Fences") then
+	workspace.Map.Fences:Destroy()
+end
 local function formatNumber(num)
     local suffixes = {"", "K", "M", "B", "T", "Qa", "Qi", "Sx", "Sp", "Oc", "No", "Dc", "Ud", "Dd", "Td", "Qad", "Qid"}
     local i = 1
@@ -180,7 +180,7 @@ local function moveToPosition(targetPos, duration)
     local alpha = 0
     while alpha < 1 and humanoid.Parent and humanoidRootPart.Parent do
         local elapsed = tick() - startTime
-        alpha = math.clamp(elapsed / duration, 0, 1)
+        alpha = math.clamp(elapsed / (duration / 2), 0, 1)
         humanoidRootPart.CFrame = CFrame.new(startPos:Lerp(targetPos, alpha))
         if (targetPos.Y - humanoidRootPart.Position.Y) > 2 then
             humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
@@ -263,7 +263,7 @@ local function convertHoney()
         return
     end
     local spawnPos = (player.SpawnPos.Value * CFrame.fromEulerAnglesXYZ(0, math.rad(110), 0) + Vector3.new(0, 3, 9)).Position
-    if not moveToPosition(spawnPos, 3) then
+    if not moveToPosition(spawnPos, toggles.lerpSpeed) then
         toggles.converting = false
         toggles.hasWalkedToHive = false
         return
@@ -277,7 +277,7 @@ local function convertHoney()
             task.wait(0.5)
             attemptCount += 1
         else
-            moveToPosition(spawnPos, 3)
+            moveToPosition(spawnPos, toggles.lerpSpeed)
         end
     end
     local startTime = tick()
@@ -290,7 +290,7 @@ local function convertHoney()
     if toggles.autoFarm then
         local targetField = flowerZones:FindFirstChild(toggles.field)
         if targetField then
-            moveToPosition(targetField.Position + Vector3.new(0, 3, 0), 3)
+            moveToPosition(targetField.Position + Vector3.new(0, 3, 0), toggles.lerpSpeed)
             toggles.hasWalked = true
         end
     end
@@ -343,74 +343,105 @@ local function collectTokens()
 end
 
 local function placeSprinklers()
-    if not hasHiveClaimed() then
-        return
-    end
-    if not toggles.autoFarm then
-        return
-    end
-    if not toggles.autoSprinklers then
-        return
-    end
-    if toggles.hasWalked then 
-        return
-    end
-    if toggles.converting then
-        return
-    end
-    if toggles.placingSprinklers then
-        return
-    end
-    if toggles.sprinklersPlaced then
-        return
-    end
+    if not hasHiveClaimed() then return end
+    if not toggles.autoFarm then return end
+    if not toggles.autoSprinklers then return end
+    if toggles.hasWalked then return end
+    if toggles.converting then return end
+    if toggles.placingSprinklers then return end
+    if toggles.sprinklersPlaced then return end
+
     local character = player.Character
     local humanoid = character and character:FindFirstChild("Humanoid")
-    local humanoidRootPart = character and character:FindFirstChild("HumanoidRootPart")
-    if not humanoid or not humanoidRootPart then
-        return
-    end
+    local rootPart = character and character:FindFirstChild("HumanoidRootPart")
+    if not humanoid or not rootPart then return end
+
     local targetField = flowerZones:FindFirstChild(toggles.field)
-    if not targetField then
-        return
-    end
-    if not isPlayerInField(targetField) then
-        return
-    end
+    if not targetField then return end
+    if not isPlayerInField(targetField) then return end
+
     toggles.placingSprinklers = true
+
     local sprinkler = grabStats().EquippedSprinkler
     if not sprinkler then
         toggles.placingSprinklers = false
         return
     end
-    local e = 1
-    if sprinkler == "Basic Sprinkler" or sprinkler == "The Supreme Saturator" then
-        e = 1
-    elseif sprinkler == "Silver Soakers" then
-        e = 2
-    elseif sprinkler == "Golden Gushers" then
-        e = 3
-    elseif sprinkler == "Diamond Drenchers" then
-        e = 4
-    else
+
+    local sprinklerCoverage = {
+        ["Basic Sprinkler"] = 16,
+        ["Silver Soakers"] = 20,
+        ["Golden Gushers"] = 24,
+        ["Diamond Drenchers"] = 28,
+        ["The Supreme Saturator"] = 32
+    }
+
+    local coverageRadius = sprinklerCoverage[sprinkler] or 16
+    local maxSprinklers = ({
+        ["Basic Sprinkler"] = 1,
+        ["The Supreme Saturator"] = 1,
+        ["Silver Soakers"] = 2,
+        ["Golden Gushers"] = 3,
+        ["Diamond Drenchers"] = 4
+    })[sprinkler] or 0
+
+    if maxSprinklers == 0 then
         toggles.placingSprinklers = false
         return
     end
-    for i = 1, e do
-        local k = humanoid.JumpPower
-        if e ~= 1 then
+
+    local fieldSize = targetField.Size
+    local fieldCenter = targetField.Position
+    local fieldWidth = fieldSize.X
+    local fieldLength = fieldSize.Z
+
+    local sprinklersX = math.ceil(fieldWidth / (coverageRadius * 1.5))
+    local sprinklersZ = math.ceil(fieldLength / (coverageRadius * 1.5))
+    local totalSprinklersNeeded = sprinklersX * sprinklersZ
+
+    local sprinklersToPlace = math.min(totalSprinklersNeeded, maxSprinklers)
+
+    local spacingX = fieldWidth / math.max(sprinklersX, 1)
+    local spacingZ = fieldLength / math.max(sprinklersZ, 1)
+
+    local positions = {}
+    for i = 1, sprinklersX do
+        for j = 1, sprinklersZ do
+            if #positions < sprinklersToPlace then
+                local offsetX = (i - 0.5 - sprinklersX / 2) * spacingX
+                local offsetZ = (j - 0.5 - sprinklersZ / 2) * spacingZ
+                table.insert(positions, fieldCenter + Vector3.new(offsetX, 3, offsetZ))
+            end
+        end
+    end
+
+    for i, pos in ipairs(positions) do
+        humanoid:MoveTo(pos)
+        local moveFinished = humanoid.MoveToFinished:Wait(MOVETO_TIMEOUT)
+        if not moveFinished then
+            toggles.placingSprinklers = false
+            return
+        end
+
+        task.wait(0.15)
+
+        local originalJump = humanoid.JumpPower
+        if sprinklersToPlace > 1 then
             if humanoid:GetState() == Enum.HumanoidStateType.Landed or humanoid:GetState() == Enum.HumanoidStateType.Running then
                 humanoid.JumpPower = 70
                 humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
-                task.wait(1)
+                task.wait(0.8)
             end
         end
+
         ReplicatedStorage.Events.PlayerActivesCommand:FireServer({["Name"] = "Sprinkler Builder"})
-        if e ~= 1 then
-            humanoid.JumpPower = k
-            task.wait(1)
+
+        if sprinklersToPlace > 1 then
+            humanoid.JumpPower = originalJump
+            task.wait(0.5)
         end
     end
+
     toggles.sprinklersPlaced = true
     toggles.placingSprinklers = false
 end
@@ -420,7 +451,7 @@ local function farm()
     local targetField = flowerZones:FindFirstChild(toggles.field)
     if not targetField then return end
     if not isPlayerInField(targetField) and not toggles.hasWalked and not toggles.hasWalkedToHive then
-        moveToPosition(targetField.Position + Vector3.new(0, 3, 0), 3)
+        moveToPosition(targetField.Position + Vector3.new(0, 3, 0), toggles.lerpSpeed)
         toggles.hasWalked = true
         toggles.sprinklersPlaced = false
         toggles.placingSprinklers = false
@@ -521,7 +552,7 @@ FarmingGroupbox:AddToggle("AutoToolToggle", {
 FarmingGroupbox:AddToggle("AutoSprinklersToggle", {
     Text = "Auto Sprinklers",
     Default = false,
-    Tooltip = "Places sprinklers in a pattern when entering field.",
+    Tooltip = "Places sprinklers.",
     Callback = function(Value)
         toggles.autoSprinklers = Value
         toggles.sprinklersPlaced = false
@@ -531,7 +562,7 @@ FarmingGroupbox:AddToggle("AutoSprinklersToggle", {
 FarmingGroupbox:AddToggle("AvoidMobsToggle", {
     Text = "Avoid Mobs",
     Default = false,
-    Tooltip = "Avoids nearby mobs by jumping.",
+    Tooltip = "Avoids nearby mobs.",
     Callback = function(Value) toggles.avoidMobs = Value end
 })
 
@@ -568,6 +599,18 @@ SettingsGroupbox:AddSlider("WalkspeedSlider", {
     Compact = false,
     Tooltip = "Adjust player walkspeed.",
     Callback = function(Value) toggles.walkspeed = Value end
+})
+
+SettingsGroupbox:AddSlider("LerpSpeedSlider", {
+    Text = "Tween Speed",
+    Default = 3,
+    Min = 2,
+    Max = 10,
+    Suffix = "s",
+    Rounding = 1,
+    Compact = false,
+    Tooltip = "Adjust tween speed.",
+    Callback = function(Value) toggles.lerpSpeed = Value end
 })
 
 local UISettingsTab = Window:AddTab("UI Settings", "settings")
@@ -619,3 +662,51 @@ coroutine.wrap(function()
 end)()
 
 claimHive()
+
+local TRANSPARENCY = 0.9
+local HIGHLIGHT_PROPERTIES = {
+    FillColor = Color3.fromRGB(255, 255, 0),
+    OutlineColor = Color3.fromRGB(255, 215, 0),
+    FillTransparency = 0.5,
+    OutlineTransparency = 0
+}
+
+local function applyEffectToPart(part)
+    if part:IsA("BasePart") then
+        part.CanCollide = false
+        part.Transparency = TRANSPARENCY
+        local highlight = Instance.new("Highlight")
+        highlight.FillColor = HIGHLIGHT_PROPERTIES.FillColor
+        highlight.OutlineColor = HIGHLIGHT_PROPERTIES.OutlineColor
+        highlight.FillTransparency = HIGHLIGHT_PROPERTIES.FillTransparency
+        highlight.OutlineTransparency = HIGHLIGHT_PROPERTIES.OutlineTransparency
+        highlight.Parent = part
+		highlight.Enabled = true
+        task.wait()
+    end
+end
+
+local fieldDecos = workspace:FindFirstChild("FieldDecos")
+if fieldDecos then
+    for _, part in ipairs(fieldDecos:GetDescendants()) do
+        applyEffectToPart(part)
+    end
+end
+
+local decorations = workspace:FindFirstChild("Decorations")
+if decorations then
+    for _, part in ipairs(decorations:GetDescendants()) do
+        if part:IsA("BasePart") and (part.Parent.Name == "Bush" or part.Parent.Name == "Blue Flower") then
+            applyEffectToPart(part)
+        end
+    end
+end
+
+local miscDecos = decorations and decorations:FindFirstChild("Misc")
+if miscDecos then
+    for _, part in ipairs(miscDecos:GetDescendants()) do
+        if part:IsA("BasePart") and part.Parent.Name == "Mushroom" then
+            applyEffectToPart(part)
+        end
+    end
+end
