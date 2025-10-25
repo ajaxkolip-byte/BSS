@@ -1,4 +1,5 @@
---// v1.02 \\--
+--// v1.03 \\--
+-- added patterns, fixed sprinklers
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -24,12 +25,13 @@ local toggles = {
     convertPercentage = 95,
     walkspeedEnabled = false,
     walkspeed = 50,
-	lerpSpeed = 3,
+    lerpSpeed = 3,
     avoidMobs = false,
     sprinklersPlaced = false,
     placingSprinklers = false,
     lastTokenClearTime = tick(),
-    lastTokenCheckTime = tick()
+    lastTokenCheckTime = tick(),
+    pattern = "Collect Tokens" -- Default pattern
 }
 local player = Players.LocalPlayer
 local events = ReplicatedStorage:WaitForChild("Events", 10)
@@ -84,7 +86,7 @@ for _, zone in ipairs(flowerZones:GetDescendants()) do
     end
 end
 if workspace.Map:FindFirstChild("Fences") then
-	workspace.Map.Fences:Destroy()
+    workspace.Map.Fences:Destroy()
 end
 local function formatNumber(num)
     local suffixes = {"", "K", "M", "B", "T", "Qa", "Qi", "Sx", "Sp", "Oc", "No", "Dc", "Ud", "Dd", "Td", "Qad", "Qid"}
@@ -274,10 +276,12 @@ local function convertHoney()
     while activateButton.TextBox.Text ~= "Stop Making Honey" and activateButton.BackgroundColor3 ~= Color3.fromRGB(201, 39, 28) and attemptCount < maxAttempts do
         if (player.SpawnPos.Value.Position - humanoidRootPart.Position).Magnitude <= 13 then
             events.PlayerHiveCommand:FireServer("ToggleHoneyMaking")
+            humanoidRootPart.Anchored = false
             task.wait(0.5)
             attemptCount += 1
         else
             moveToPosition(spawnPos, toggles.lerpSpeed)
+            humanoidRootPart.Anchored = true
         end
     end
     local startTime = tick()
@@ -341,7 +345,6 @@ local function collectTokens()
         end
     end
 end
-
 local function placeSprinklers()
     if not hasHiveClaimed() then return end
     if not toggles.autoFarm then return end
@@ -350,24 +353,19 @@ local function placeSprinklers()
     if toggles.converting then return end
     if toggles.placingSprinklers then return end
     if toggles.sprinklersPlaced then return end
-
     local character = player.Character
     local humanoid = character and character:FindFirstChild("Humanoid")
     local rootPart = character and character:FindFirstChild("HumanoidRootPart")
     if not humanoid or not rootPart then return end
-
     local targetField = flowerZones:FindFirstChild(toggles.field)
     if not targetField then return end
     if not isPlayerInField(targetField) then return end
-
     toggles.placingSprinklers = true
-
     local sprinkler = grabStats().EquippedSprinkler
     if not sprinkler then
         toggles.placingSprinklers = false
         return
     end
-
     local sprinklerCoverage = {
         ["Basic Sprinkler"] = 16,
         ["Silver Soakers"] = 20,
@@ -375,46 +373,42 @@ local function placeSprinklers()
         ["Diamond Drenchers"] = 28,
         ["The Supreme Saturator"] = 32
     }
-
-    local coverageRadius = sprinklerCoverage[sprinkler] or 16
-    local maxSprinklers = ({
+    local maxSprinklers = {
         ["Basic Sprinkler"] = 1,
         ["The Supreme Saturator"] = 1,
         ["Silver Soakers"] = 2,
         ["Golden Gushers"] = 3,
         ["Diamond Drenchers"] = 4
-    })[sprinkler] or 0
-
-    if maxSprinklers == 0 then
+    }
+    local coverageRadius = sprinklerCoverage[sprinkler] or 16
+    local maxSprinklersAllowed = maxSprinklers[sprinkler] or 0
+    if maxSprinklersAllowed == 0 then
         toggles.placingSprinklers = false
         return
     end
-
     local fieldSize = targetField.Size
     local fieldCenter = targetField.Position
     local fieldWidth = fieldSize.X
     local fieldLength = fieldSize.Z
-
-    local sprinklersX = math.ceil(fieldWidth / (coverageRadius * 1.5))
-    local sprinklersZ = math.ceil(fieldLength / (coverageRadius * 1.5))
-    local totalSprinklersNeeded = sprinklersX * sprinklersZ
-
-    local sprinklersToPlace = math.min(totalSprinklersNeeded, maxSprinklers)
-
-    local spacingX = fieldWidth / math.max(sprinklersX, 1)
-    local spacingZ = fieldLength / math.max(sprinklersZ, 1)
-
     local positions = {}
-    for i = 1, sprinklersX do
-        for j = 1, sprinklersZ do
-            if #positions < sprinklersToPlace then
-                local offsetX = (i - 0.5 - sprinklersX / 2) * spacingX
-                local offsetZ = (j - 0.5 - sprinklersZ / 2) * spacingZ
-                table.insert(positions, fieldCenter + Vector3.new(offsetX, 3, offsetZ))
-            end
-        end
+    if sprinkler == "Basic Sprinkler" or sprinkler == "The Supreme Saturator" then
+        table.insert(positions, fieldCenter + Vector3.new(0, 3, 0))
+    elseif sprinkler == "Silver Soakers" then
+        local offsetZ = coverageRadius * 0.5
+        table.insert(positions, fieldCenter + Vector3.new(0, 3, -offsetZ))
+        table.insert(positions, fieldCenter + Vector3.new(0, 3, offsetZ))
+    elseif sprinkler == "Golden Gushers" then
+        local radius = coverageRadius * 0.5
+        table.insert(positions, fieldCenter + Vector3.new(0, 3, -radius))
+        table.insert(positions, fieldCenter + Vector3.new(-radius * math.sqrt(3) / 2, 3, radius / 2))
+        table.insert(positions, fieldCenter + Vector3.new(radius * math.sqrt(3) / 2, 3, radius / 2))
+    elseif sprinkler == "Diamond Drenchers" then
+        local offset = coverageRadius * 0.5
+        table.insert(positions, fieldCenter + Vector3.new(-offset, 3, -offset))
+        table.insert(positions, fieldCenter + Vector3.new(-offset, 3, offset))
+        table.insert(positions, fieldCenter + Vector3.new(offset, 3, -offset))
+        table.insert(positions, fieldCenter + Vector3.new(offset, 3, offset))
     end
-
     for i, pos in ipairs(positions) do
         humanoid:MoveTo(pos)
         local moveFinished = humanoid.MoveToFinished:Wait(MOVETO_TIMEOUT)
@@ -422,49 +416,115 @@ local function placeSprinklers()
             toggles.placingSprinklers = false
             return
         end
-
         task.wait(0.15)
-
         local originalJump = humanoid.JumpPower
-        if sprinklersToPlace > 1 then
+        if maxSprinklersAllowed > 1 then
             if humanoid:GetState() == Enum.HumanoidStateType.Landed or humanoid:GetState() == Enum.HumanoidStateType.Running then
                 humanoid.JumpPower = 70
                 humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
                 task.wait(0.8)
             end
         end
-
         ReplicatedStorage.Events.PlayerActivesCommand:FireServer({["Name"] = "Sprinkler Builder"})
-
-        if sprinklersToPlace > 1 then
+        if maxSprinklersAllowed > 1 then
             humanoid.JumpPower = originalJump
             task.wait(0.5)
         end
     end
-
     toggles.sprinklersPlaced = true
     toggles.placingSprinklers = false
 end
+
+local tiggle = false
+
+local patterns = {
+    ["Collect Tokens"] = function(targetField)
+        collectTokens()
+    end,
+    ["Spiral"] = function(targetField)
+        local character = player.Character
+        local humanoid = character and character:FindFirstChild("Humanoid")
+        local humanoidRootPart = character and character:FindFirstChild("HumanoidRootPart")
+        if not humanoid or not humanoidRootPart or not targetField then return end
+        tiggle = true
+        local fieldCenter = targetField.Position
+        local fieldSize = targetField.Size
+        local radius = math.min(fieldSize.X, fieldSize.Z) / 4
+        local steps = 20
+        local angleStep = 2 * math.pi / steps
+        local maxLoops = 3
+        for loop = 1, maxLoops do
+            for i = 1, steps do
+                local angle = i * angleStep
+                local r = radius * (loop / maxLoops)
+                local x = r * math.cos(angle)
+                local z = r * math.sin(angle)
+                local targetPos = fieldCenter + Vector3.new(x, 3, z)
+                humanoid:MoveTo(targetPos)
+                humanoid.MoveToFinished:Wait()
+            end
+        end
+        tiggle = false
+    end,
+    ["ZigZag"] = function(targetField)
+        local character = player.Character
+        local humanoid = character and character:FindFirstChild("Humanoid")
+        local humanoidRootPart = character and character:FindFirstChild("HumanoidRootPart")
+        if not humanoid or not humanoidRootPart or not targetField then return end
+        tiggle = true
+        local fieldCenter = targetField.Position
+        local fieldSize = targetField.Size
+        local stepSize = 10
+        local xSteps = math.floor(fieldSize.X / stepSize)
+        local zSteps = math.floor(fieldSize.Z / stepSize)
+        for x = -xSteps / 2, xSteps / 2 do
+            local zStart = -zSteps / 2
+            local zEnd = zSteps / 2
+            if x % 2 == 0 then
+                for z = zStart, zEnd do
+                    local targetPos = fieldCenter + Vector3.new(x * stepSize, 3, z * stepSize)
+                    humanoid:MoveTo(targetPos)
+                    humanoid.MoveToFinished:Wait()
+                end
+            else
+                for z = zEnd, zStart, -1 do
+                    local targetPos = fieldCenter + Vector3.new(x * stepSize, 3, z * stepSize)
+                    humanoid:MoveTo(targetPos)
+                    humanoid.MoveToFinished:Wait()
+                end
+            end
+        end
+        tiggle = false
+    end,
+}
 
 local function farm()
     if not hasHiveClaimed() or not toggles.autoFarm or toggles.converting then return end
     local targetField = flowerZones:FindFirstChild(toggles.field)
     if not targetField then return end
     if not isPlayerInField(targetField) and not toggles.hasWalked and not toggles.hasWalkedToHive then
+        tiggle = true
         moveToPosition(targetField.Position + Vector3.new(0, 3, 0), toggles.lerpSpeed)
         toggles.hasWalked = true
         toggles.sprinklersPlaced = false
         toggles.placingSprinklers = false
+        tiggle = false
     elseif isPlayerInField(targetField) then
         toggles.hasWalked = false
         if toggles.autoSprinklers and not toggles.sprinklersPlaced and not toggles.placingSprinklers then
-		task.wait(2)
+            task.wait(2)
             placeSprinklers()
+        end
+		task.wait(1)
+        local patternFunc = patterns[toggles.pattern]
+        if patternFunc and not tiggle then 
+			if not toggles.placingSprinklers then
+            	patternFunc(targetField)
+			end
         end
     end
     convertHoney()
 end
-
 local function avoidMobs()
     if not toggles.avoidMobs or not hasHiveClaimed() then return end
     for _, mob in ipairs(workspace.Monsters:GetChildren()) do
@@ -473,20 +533,17 @@ local function avoidMobs()
         end
     end
 end
-
 local function updateWalkspeed()
     if not hasHiveClaimed() or not toggles.walkspeedEnabled then return end
     local humanoid = player.Character and player.Character:FindFirstChild("Humanoid")
     if humanoid then humanoid.WalkSpeed = toggles.walkspeed end
 end
-
 local function clearVisitedTokens()
     if tick() - toggles.lastTokenClearTime >= TOKEN_CLEAR_INTERVAL then
         toggles.visitedTokens = {}
         toggles.lastTokenClearTime = tick()
     end
 end
-
 local function resetOnDeath()
     toggles.hasWalked = false
     toggles.hasWalkedToHive = false
@@ -495,11 +552,9 @@ local function resetOnDeath()
     toggles.placingSprinklers = false
     toggles.visitedTokens = {}
 end
-
 local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/deividcomsono/Obsidian/refs/heads/main/Library.lua"))()
 local ThemeManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/deividcomsono/Obsidian/main/addons/ThemeManager.lua"))()
 local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/deividcomsono/Obsidian/main/addons/SaveManager.lua"))()
-
 local Window = Library:CreateWindow({
     Title = "Faygoware",
     Footer = "v1.0.0",
@@ -510,11 +565,9 @@ local Window = Library:CreateWindow({
     Size = UDim2.fromOffset(720, 300),
     Resizable = false
 })
-
 local HomeTab = Window:AddTab("Home", "house")
 local HomeLeftGroupbox = HomeTab:AddLeftGroupbox("Stats")
 local WrappedLabel = HomeLeftGroupbox:AddLabel({ Text = "", DoesWrap = true })
-
 local MainTab = Window:AddTab("Farming", "shovel")
 local FarmingGroupbox = MainTab:AddLeftGroupbox("Farming")
 FarmingGroupbox:AddDropdown("FieldDropdown", {
@@ -565,7 +618,18 @@ FarmingGroupbox:AddToggle("AvoidMobsToggle", {
     Tooltip = "Avoids nearby mobs.",
     Callback = function(Value) toggles.avoidMobs = Value end
 })
-
+FarmingGroupbox:AddDropdown("PatternDropdown", {
+    Values = {
+        "Collect Tokens", "Spiral", "ZigZag",
+    },
+    Default = "Collect Tokens",
+    Multi = false,
+    Text = "Pattern",
+    Tooltip = "Select a farming pattern.",
+    Callback = function(Value)
+        toggles.pattern = Value
+    end
+})
 local SettingsGroupbox = MainTab:AddRightGroupbox("Settings")
 SettingsGroupbox:AddSlider("ConvertSlider", {
     Text = "Convert at",
@@ -600,7 +664,6 @@ SettingsGroupbox:AddSlider("WalkspeedSlider", {
     Tooltip = "Adjust player walkspeed.",
     Callback = function(Value) toggles.walkspeed = Value end
 })
-
 SettingsGroupbox:AddSlider("LerpSpeedSlider", {
     Text = "Tween Speed",
     Default = 3,
@@ -612,7 +675,6 @@ SettingsGroupbox:AddSlider("LerpSpeedSlider", {
     Tooltip = "Adjust tween speed.",
     Callback = function(Value) toggles.lerpSpeed = Value end
 })
-
 local UISettingsTab = Window:AddTab("UI Settings", "settings")
 ThemeManager:SetLibrary(Library)
 SaveManager:SetLibrary(Library)
@@ -620,29 +682,23 @@ SaveManager:SetIgnoreIndexes({ "MenuKeybind" })
 SaveManager:BuildConfigSection(UISettingsTab)
 ThemeManager:ApplyToTab(UISettingsTab)
 SaveManager:LoadAutoloadConfig()
-
 player.Idled:Connect(function()
     VirtualUser:Button2Down(Vector2.new(0, 0), workspace.CurrentCamera.CFrame)
     task.wait(1)
     VirtualUser:Button2Up(Vector2.new(0, 0), workspace.CurrentCamera.CFrame)
 end)
-
 player.CharacterAdded:Connect(resetOnDeath)
-
 local initialHoney = grabStats().Honey or 0
 local sessionStartTime = tick()
-
 RunService.Heartbeat:Connect(function()
     if hasHiveClaimed() then
         dig()
         farm()
-        collectTokens()
         updateWalkspeed()
         avoidMobs()
         clearVisitedTokens()
     end
 end)
-
 coroutine.wrap(function()
     while task.wait(1) do
         local stats = grabStats()
@@ -660,9 +716,7 @@ coroutine.wrap(function()
         ))
     end
 end)()
-
 claimHive()
-
 local TRANSPARENCY = 0.9
 local HIGHLIGHT_PROPERTIES = {
     FillColor = Color3.fromRGB(255, 255, 0),
@@ -670,7 +724,6 @@ local HIGHLIGHT_PROPERTIES = {
     FillTransparency = 0.5,
     OutlineTransparency = 0
 }
-
 local function applyEffectToPart(part)
     if part:IsA("BasePart") then
         part.CanCollide = false
@@ -681,18 +734,16 @@ local function applyEffectToPart(part)
         highlight.FillTransparency = HIGHLIGHT_PROPERTIES.FillTransparency
         highlight.OutlineTransparency = HIGHLIGHT_PROPERTIES.OutlineTransparency
         highlight.Parent = part
-		highlight.Enabled = true
+        highlight.Enabled = true
         task.wait()
     end
 end
-
 local fieldDecos = workspace:FindFirstChild("FieldDecos")
 if fieldDecos then
     for _, part in ipairs(fieldDecos:GetDescendants()) do
         applyEffectToPart(part)
     end
 end
-
 local decorations = workspace:FindFirstChild("Decorations")
 if decorations then
     for _, part in ipairs(decorations:GetDescendants()) do
@@ -701,7 +752,6 @@ if decorations then
         end
     end
 end
-
 local miscDecos = decorations and decorations:FindFirstChild("Misc")
 if miscDecos then
     for _, part in ipairs(miscDecos:GetDescendants()) do
