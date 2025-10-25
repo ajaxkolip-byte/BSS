@@ -31,7 +31,7 @@ local toggles = {
     placingSprinklers = false,
     lastTokenClearTime = tick(),
     lastTokenCheckTime = tick(),
-    pattern = "Collect Tokens" -- Default pattern
+    pattern = "Collect Tokens"
 }
 local player = Players.LocalPlayer
 local events = ReplicatedStorage:WaitForChild("Events", 10)
@@ -294,7 +294,7 @@ local function convertHoney()
     if toggles.autoFarm then
         local targetField = flowerZones:FindFirstChild(toggles.field)
         if targetField then
-            moveToPosition(targetField.Position + Vector3.new(0, 3, 0), toggles.lerpSpeed)
+            moveToPosition(targetField.Position + Vector3.new(0, 7, 0), toggles.lerpSpeed)
             toggles.hasWalked = true
         end
     end
@@ -508,29 +508,36 @@ local function farm()
     if not hasHiveClaimed() or not toggles.autoFarm or toggles.converting then return end
     local targetField = flowerZones:FindFirstChild(toggles.field)
     if not targetField then return end
-    if not isPlayerInField(targetField) and not toggles.hasWalked and not toggles.hasWalkedToHive then
-        tiggle = true
-        moveToPosition(targetField.Position + Vector3.new(0, 3, 0), toggles.lerpSpeed)
-        toggles.hasWalked = true
-        toggles.sprinklersPlaced = false
-        toggles.placingSprinklers = false
-        tiggle = false
+    local character = player.Character
+    local humanoid = character and character:FindFirstChild("Humanoid")
+    if not humanoid then return end
+    if not isPlayerInField(targetField) and not toggles.hasWalked and not toggles.hasWalkedToHive and not toggles.placingSprinklers then
+        local state = humanoid:GetState()
+        if state ~= Enum.HumanoidStateType.Jumping and state ~= Enum.HumanoidStateType.Freefall then
+            tiggle = true
+            moveToPosition(targetField.Position + Vector3.new(0, 7, 0), toggles.lerpSpeed)
+            toggles.hasWalked = true
+            toggles.sprinklersPlaced = false
+            toggles.placingSprinklers = false
+            tiggle = false
+        end
     elseif isPlayerInField(targetField) then
         toggles.hasWalked = false
         if toggles.autoSprinklers and not toggles.sprinklersPlaced and not toggles.placingSprinklers then
             task.wait(2)
             placeSprinklers()
         end
-		task.wait(1)
+        task.wait(1)
         local patternFunc = patterns[toggles.pattern]
         if patternFunc and not tiggle then 
-			if not toggles.placingSprinklers then
-            	patternFunc(targetField)
-			end
+            if not toggles.placingSprinklers then
+                patternFunc(targetField)
+            end
         end
     end
     convertHoney()
 end
+
 local function avoidMobs()
     if not toggles.avoidMobs or not hasHiveClaimed() then return end
     for _, mob in ipairs(workspace.Monsters:GetChildren()) do
