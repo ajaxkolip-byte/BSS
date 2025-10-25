@@ -1,4 +1,4 @@
---// v1.03 \\--
+--// v0.03 \\--
 -- added patterns, fixed sprinklers
 
 local Players = game:GetService("Players")
@@ -435,13 +435,14 @@ local function placeSprinklers()
     toggles.placingSprinklers = false
 end
 
-local tiggle = false
+local tiggle = false 
 
 local patterns = {
     ["Collect Tokens"] = function(targetField)
         collectTokens()
     end,
-    ["Spiral"] = function(targetField)
+    ["Spiral"] = function(targetField, offset)
+        offset = offset or 5
         local character = player.Character
         local humanoid = character and character:FindFirstChild("Humanoid")
         local humanoidRootPart = character and character:FindFirstChild("HumanoidRootPart")
@@ -449,7 +450,9 @@ local patterns = {
         tiggle = true
         local fieldCenter = targetField.Position
         local fieldSize = targetField.Size
-        local radius = math.min(fieldSize.X, fieldSize.Z) / 4
+        local effectiveSizeX = fieldSize.X - 2 * offset
+        local effectiveSizeZ = fieldSize.Z - 2 * offset
+        local radius = math.min(effectiveSizeX, effectiveSizeZ) / 4
         local steps = 20
         local angleStep = 2 * math.pi / steps
         local maxLoops = 3
@@ -466,7 +469,8 @@ local patterns = {
         end
         tiggle = false
     end,
-    ["ZigZag"] = function(targetField)
+    ["ZigZag"] = function(targetField, offset)
+        offset = offset or 5
         local character = player.Character
         local humanoid = character and character:FindFirstChild("Humanoid")
         local humanoidRootPart = character and character:FindFirstChild("HumanoidRootPart")
@@ -474,9 +478,11 @@ local patterns = {
         tiggle = true
         local fieldCenter = targetField.Position
         local fieldSize = targetField.Size
+        local effectiveSizeX = fieldSize.X - 2 * offset
+        local effectiveSizeZ = fieldSize.Z - 2 * offset
         local stepSize = 10
-        local xSteps = math.floor(fieldSize.X / stepSize)
-        local zSteps = math.floor(fieldSize.Z / stepSize)
+        local xSteps = math.floor(effectiveSizeX / stepSize)
+        local zSteps = math.floor(effectiveSizeZ / stepSize)
         for x = -xSteps / 2, xSteps / 2 do
             local zStart = -zSteps / 2
             local zEnd = zSteps / 2
