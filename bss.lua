@@ -503,30 +503,104 @@ local patterns = {
         tiggle = false
     end,
     ["Square"] = function(targetField, offset)
-    offset = offset or 5
-    local character = player.Character
-    local humanoid = character and character:FindFirstChild("Humanoid")
-    local humanoidRootPart = character and character:FindFirstChild("HumanoidRootPart")
-    if not humanoid or not humanoidRootPart or not targetField then return end
-    tiggle = true
-    local fieldCenter = targetField.Position
-    local fieldSize = targetField.Size
-    local effectiveSizeX = fieldSize.X - 2 * offset
-    local effectiveSizeZ = fieldSize.Z - 2 * offset
-    local squareSize = math.min(effectiveSizeX, effectiveSizeZ) / 4 
-    local halfSize = squareSize / 2
-    local corners = {
-        fieldCenter + Vector3.new(halfSize, 3, halfSize), 
-        fieldCenter + Vector3.new(halfSize, 3, -halfSize),
-        fieldCenter + Vector3.new(-halfSize, 3, -halfSize),
-        fieldCenter + Vector3.new(-halfSize, 3, halfSize)
-    }
-    for _, corner in ipairs(corners) do
-        humanoid:MoveTo(corner)
-        humanoid.MoveToFinished:Wait(MOVETO_TIMEOUT)
-    end
-    tiggle = false
-end,
+        offset = offset or 5
+        local character = player.Character
+        local humanoid = character and character:FindFirstChild("Humanoid")
+        local humanoidRootPart = character and character:FindFirstChild("HumanoidRootPart")
+        if not humanoid or not humanoidRootPart or not targetField then return end
+        tiggle = true
+        local fieldCenter = targetField.Position
+        local fieldSize = targetField.Size
+        local effectiveSizeX = fieldSize.X - 2 * offset
+        local effectiveSizeZ = fieldSize.Z - 2 * offset
+        local squareSize = math.min(effectiveSizeX, effectiveSizeZ) / 4 
+        local halfSize = squareSize / 2
+        local corners = {
+            fieldCenter + Vector3.new(halfSize, 3, halfSize), 
+            fieldCenter + Vector3.new(halfSize, 3, -halfSize),
+            fieldCenter + Vector3.new(-halfSize, 3, -halfSize),
+            fieldCenter + Vector3.new(-halfSize, 3, halfSize)
+        }
+        for _, corner in ipairs(corners) do
+            humanoid:MoveTo(corner)
+            humanoid.MoveToFinished:Wait(MOVETO_TIMEOUT)
+        end
+        tiggle = false
+    end,
+    ["CornerxSnake"] = function(targetField, offset)
+        offset = offset or 5
+        local character = player.Character
+        local humanoid = character and character:FindFirstChild("Humanoid")
+        local humanoidRootPart = character and character:FindFirstChild("HumanoidRootPart")
+        if not humanoid or not humanoidRootPart or not targetField then return end
+        tiggle = true
+        local fieldCenter = targetField.Position
+        local fieldSize = targetField.Size
+        local effectiveSizeX = fieldSize.X - 2 * offset
+        local effectiveSizeZ = fieldSize.Z - 2 * offset
+        local stepSize = 10
+        local xSteps = math.floor(effectiveSizeX / stepSize / 2)
+        local zSteps = math.floor(effectiveSizeZ / stepSize / 2)
+        local startCornerX = -effectiveSizeX / 2
+        local startCornerZ = -effectiveSizeZ / 2
+        for x = 0, xSteps - 1 do
+            local zStart, zEnd, zInc
+            if x % 2 == 0 then
+                zStart = startCornerZ
+                zEnd = startCornerZ + effectiveSizeZ / 2
+                zInc = stepSize
+            else
+                zStart = startCornerZ + effectiveSizeZ / 2
+                zEnd = startCornerZ
+                zInc = -stepSize
+            end
+            for z = zStart, zEnd, zInc do
+                local targetPos = fieldCenter + Vector3.new(startCornerX + x * stepSize, 3, z)
+                humanoid:MoveTo(targetPos)
+                humanoid.MoveToFinished:Wait()
+            end
+        end
+        tiggle = false
+    end,
+    ["e_lol"] = function(targetField, offset)
+        offset = offset or 5
+        local character = player.Character
+        local humanoid = character and character:FindFirstChild("Humanoid")
+        local humanoidRootPart = character and character:FindFirstChild("HumanoidRootPart")
+        if not humanoid or not humanoidRootPart or not targetField then return end
+        tiggle = true
+        local fieldCenter = targetField.Position
+        local fieldSize = targetField.Size
+        local effectiveSizeX = fieldSize.X - 2 * offset
+        local effectiveSizeZ = fieldSize.Z - 2 * offset
+        local stepSize = 10
+        local xSteps = math.floor(effectiveSizeX / stepSize)
+        local zSteps = math.floor(effectiveSizeZ / stepSize / 3)
+        local startCornerX = effectiveSizeX / 2
+        local startCornerZ = -effectiveSizeZ / 2
+        local xPositions = {
+            startCornerX - effectiveSizeX / 2,
+            startCornerX - (effectiveSizeX * 3 / 4),
+            startCornerX - effectiveSizeX
+        }
+        for i, x in ipairs(xPositions) do
+            for z = startCornerZ, startCornerZ + effectiveSizeZ / 3, stepSize do
+                local targetPos = fieldCenter + Vector3.new(x, 3, z)
+                humanoid:MoveTo(targetPos)
+                humanoid.MoveToFinished:Wait()
+            end
+            if i < #xPositions then
+                local nextX = xPositions[i + 1]
+                local targetPos = fieldCenter + Vector3.new(nextX, 3, startCornerZ + effectiveSizeZ / 3)
+                humanoid:MoveTo(targetPos)
+                humanoid.MoveToFinished:Wait()
+            end
+        end
+        local targetPos = fieldCenter + Vector3.new(xPositions[1], 3, startCornerZ)
+        humanoid:MoveTo(targetPos)
+        humanoid.MoveToFinished:Wait()
+        tiggle = false
+    end,
 }
 
 local function farm()
@@ -664,7 +738,7 @@ FarmingGroupbox:AddToggle("AvoidMobsToggle", {
 })
 FarmingGroupbox:AddDropdown("PatternDropdown", {
     Values = {
-        "Collect Tokens", "Spiral", "ZigZag", "Square"
+        "Collect Tokens", "Spiral", "ZigZag", "Square", "CornerxSnake", "e_lol"
     },
     Default = "Collect Tokens",
     Multi = false,
