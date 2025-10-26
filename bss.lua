@@ -182,7 +182,7 @@ local function moveToPosition(targetPos, duration)
     local alpha = 0
     while alpha < 1 and humanoid.Parent and humanoidRootPart.Parent do
         local elapsed = tick() - startTime
-        alpha = math.clamp(elapsed / (duration / 2), 0, 1)
+        alpha = math.clamp(elapsed / (duration), 0, 1)
         humanoidRootPart.CFrame = CFrame.new(startPos:Lerp(targetPos, alpha))
         if (targetPos.Y - humanoidRootPart.Position.Y) > 2 then
             humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
@@ -502,10 +502,39 @@ local patterns = {
         end
         tiggle = false
     end,
+    ["Square"] = function(targetField, offset)
+    offset = offset or 5
+    local character = player.Character
+    local humanoid = character and character:FindFirstChild("Humanoid")
+    local humanoidRootPart = character and character:FindFirstChild("HumanoidRootPart")
+    if not humanoid or not humanoidRootPart or not targetField then return end
+    tiggle = true
+    local fieldCenter = targetField.Position
+    local fieldSize = targetField.Size
+    local effectiveSizeX = fieldSize.X - 2 * offset
+    local effectiveSizeZ = fieldSize.Z - 2 * offset
+    local squareSize = math.min(effectiveSizeX, effectiveSizeZ) / 4 
+    local halfSize = squareSize / 2
+    local corners = {
+        fieldCenter + Vector3.new(halfSize, 3, halfSize), 
+        fieldCenter + Vector3.new(halfSize, 3, -halfSize),
+        fieldCenter + Vector3.new(-halfSize, 3, -halfSize),
+        fieldCenter + Vector3.new(-halfSize, 3, halfSize)
+    }
+    for _, corner in ipairs(corners) do
+        humanoid:MoveTo(corner)
+        humanoid.MoveToFinished:Wait(MOVETO_TIMEOUT)
+    end
+    tiggle = false
+end,
 }
 
 local function farm()
-    if not hasHiveClaimed() or not toggles.autoFarm or toggles.converting then return end
+    if not hasHiveClaimed() or not toggles.autoFarm or toggles.converting then 
+	    local controlScript = player:WaitForChild("PlayerScripts"):WaitForChild("ControlScript")
+        controlScript.Enabled = true
+		return
+	end
     local targetField = flowerZones:FindFirstChild(toggles.field)
     if not targetField then return end
     local character = player.Character
@@ -522,6 +551,8 @@ local function farm()
             tiggle = false
         end
     elseif isPlayerInField(targetField) then
+        local controlScript = player:WaitForChild("PlayerScripts"):WaitForChild("ControlScript")
+        controlScript.Enabled = false
         toggles.hasWalked = false
         if toggles.autoSprinklers and not toggles.sprinklersPlaced and not toggles.placingSprinklers then
             task.wait(2)
@@ -633,7 +664,7 @@ FarmingGroupbox:AddToggle("AvoidMobsToggle", {
 })
 FarmingGroupbox:AddDropdown("PatternDropdown", {
     Values = {
-        "Collect Tokens", "Spiral", "ZigZag",
+        "Collect Tokens", "Spiral", "ZigZag", "Square"
     },
     Default = "Collect Tokens",
     Multi = false,
