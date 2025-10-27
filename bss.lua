@@ -31,7 +31,8 @@ local toggles = {
     placingSprinklers = false,
     lastTokenClearTime = tick(),
     lastTokenCheckTime = tick(),
-    pattern = "Collect Tokens"
+    pattern = "Collect Tokens",
+    isTweeningToField = false
 }
 local player = Players.LocalPlayer
 local events = ReplicatedStorage:WaitForChild("Events", 10)
@@ -241,13 +242,22 @@ local function dig()
     animationTrack.Stopped:Connect(function() animation:Destroy() end)
 end
 local function isPlayerInField(field)
-    local humanoidRootPart = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+    local character = player.Character
+    local humanoidRootPart = character and character:FindFirstChild("HumanoidRootPart")
     if not humanoidRootPart or not field then return false end
-    local region = Region3.new(field.Position - field.Size / 2, field.Position + field.Size / 2)
-    for _, part in ipairs(workspace:FindPartsInRegion3(region, nil, 1000)) do
-        if part:IsDescendantOf(player.Character) then return true end
-    end
-    return false
+    local playerPos = humanoidRootPart.Position
+    local fieldPos = field.Position
+    local fieldSize = field.Size
+    local buffer = 5
+    local minX = fieldPos.X - (fieldSize.X / 2 + buffer)
+    local maxX = fieldPos.X + (fieldSize.X / 2 + buffer)
+    local minY = fieldPos.Y - (fieldSize.Y / 2 + buffer)
+    local maxY = fieldPos.Y + (fieldSize.Y / 2 + buffer)
+    local minZ = fieldPos.Z - (fieldSize.Z / 2 + buffer)
+    local maxZ = fieldPos.Z + (fieldSize.Z / 2 + buffer)
+    return playerPos.X >= minX and playerPos.X <= maxX and
+           playerPos.Y >= minY and playerPos.Y <= maxY and
+           playerPos.Z >= minZ and playerPos.Z <= maxZ
 end
 local function convertHoney()
     if not hasHiveClaimed() or toggles.converting or toggles.hasWalkedToHive then return end
@@ -296,6 +306,7 @@ local function convertHoney()
         if targetField then
             moveToPosition(targetField.Position + Vector3.new(0, 7, 0), toggles.lerpSpeed)
             toggles.hasWalked = true
+            toggles.isTweeningToField = false
         end
     end
 end
@@ -349,7 +360,6 @@ local function placeSprinklers()
     if not hasHiveClaimed() then return end
     if not toggles.autoFarm then return end
     if not toggles.autoSprinklers then return end
-    if toggles.hasWalked then return end
     if toggles.converting then return end
     if toggles.placingSprinklers then return end
     if toggles.sprinklersPlaced then return end
@@ -388,8 +398,6 @@ local function placeSprinklers()
     end
     local fieldSize = targetField.Size
     local fieldCenter = targetField.Position
-    local fieldWidth = fieldSize.X
-    local fieldLength = fieldSize.Z
     local positions = {}
     if sprinkler == "Basic Sprinkler" or sprinkler == "The Supreme Saturator" then
         table.insert(positions, fieldCenter + Vector3.new(0, 3, 0))
@@ -434,9 +442,7 @@ local function placeSprinklers()
     toggles.sprinklersPlaced = true
     toggles.placingSprinklers = false
 end
-
 local tiggle = false 
-
 local patterns = {
     ["Collect Tokens"] = function(targetField)
         collectTokens()
@@ -602,37 +608,34 @@ local patterns = {
         tiggle = false
     end,
 }
-
 local function farm()
     if not hasHiveClaimed() or not toggles.autoFarm or toggles.converting then 
-	    local controlScript = player:WaitForChild("PlayerScripts"):WaitForChild("ControlScript")
+        local controlScript = player:WaitForChild("PlayerScripts"):WaitForChild("ControlScript")
         controlScript.Enabled = true
-		return
-	end
+        return
+    end
     local targetField = flowerZones:FindFirstChild(toggles.field)
     if not targetField then return end
     local character = player.Character
     local humanoid = character and character:FindFirstChild("Humanoid")
     if not humanoid then return end
-    if not isPlayerInField(targetField) and not toggles.hasWalked and not toggles.hasWalkedToHive and not toggles.placingSprinklers then
-        local state = humanoid:GetState()
-        if state ~= Enum.HumanoidStateType.Jumping and state ~= Enum.HumanoidStateType.Freefall then
-            tiggle = true
-            moveToPosition(targetField.Position + Vector3.new(0, 7, 0), toggles.lerpSpeed)
+    if not isPlayerInField(targetField) and not toggles.hasWalked and not toggles.hasWalkedToHive and not toggles.placingSprinklers and not toggles.isTweeningToField then
+        toggles.isTweeningToField = true
+        tiggle = true
+        if moveToPosition(targetField.Position + Vector3.new(0, 7, 0), toggles.lerpSpeed) then
             toggles.hasWalked = true
             toggles.sprinklersPlaced = false
             toggles.placingSprinklers = false
-            tiggle = false
         end
+        toggles.isTweeningToField = false
+        tiggle = false
     elseif isPlayerInField(targetField) then
         local controlScript = player:WaitForChild("PlayerScripts"):WaitForChild("ControlScript")
         controlScript.Enabled = false
-        toggles.hasWalked = false
+        toggles.hasWalked = true
         if toggles.autoSprinklers and not toggles.sprinklersPlaced and not toggles.placingSprinklers then
-            task.wait(2)
             placeSprinklers()
         end
-        task.wait(1)
         local patternFunc = patterns[toggles.pattern]
         if patternFunc and not tiggle then 
             if not toggles.placingSprinklers then
@@ -642,7 +645,6 @@ local function farm()
     end
     convertHoney()
 end
-
 local function avoidMobs()
     if not toggles.avoidMobs or not hasHiveClaimed() then return end
     for _, mob in ipairs(workspace.Monsters:GetChildren()) do
@@ -668,6 +670,7 @@ local function resetOnDeath()
     toggles.converting = false
     toggles.sprinklersPlaced = false
     toggles.placingSprinklers = false
+    toggles.isTweeningToField = false
     toggles.visitedTokens = {}
 end
 local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/deividcomsono/Obsidian/refs/heads/main/Library.lua"))()
@@ -700,6 +703,7 @@ FarmingGroupbox:AddDropdown("FieldDropdown", {
         toggles.hasWalkedToHive = false
         toggles.sprinklersPlaced = false
         toggles.placingSprinklers = false
+        toggles.isTweeningToField = false
     end
 })
 FarmingGroupbox:AddToggle("AutoFarmToggle", {
@@ -712,6 +716,7 @@ FarmingGroupbox:AddToggle("AutoFarmToggle", {
         toggles.hasWalkedToHive = false
         toggles.sprinklersPlaced = false
         toggles.placingSprinklers = false
+        toggles.isTweeningToField = false
     end
 })
 FarmingGroupbox:AddToggle("AutoToolToggle", {
